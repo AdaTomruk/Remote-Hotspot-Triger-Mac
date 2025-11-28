@@ -45,8 +45,8 @@ class BLEManager: NSObject, ObservableObject {
     // These UUIDs should match the Android BLE server implementation
     // IMPORTANT: Replace these with your own unique UUIDs generated using `uuidgen` command
     // or an online UUID generator to avoid conflicts with other applications
-    static let hotspotServiceUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
-    static let hotspotCharacteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567891")
+    static let hotspotServiceUUID = CBUUID(string: "C15ABA22-C32C-4A01-A770-80B82782D92F")
+    static let hotspotCharacteristicUUID = CBUUID(string: "19A0B431-9E31-41C4-9DB0-D8EA70E81501")
     
     // Command to trigger hotspot
     static let triggerHotspotCommand: Data = "ENABLE_HOTSPOT".data(using: .utf8)!
