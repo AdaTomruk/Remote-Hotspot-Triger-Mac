@@ -19,8 +19,8 @@ A SwiftUI menu bar application for macOS that triggers a Bluetooth Low Energy (B
 ### Android
 - Android phone with BLE GATT server capability
 - Companion Android app that:
-  - Advertises the BLE service with UUID: `12345678-1234-5678-1234-56789ABCDEF0`
-  - Exposes a writable characteristic with UUID: `12345678-1234-5678-1234-56789ABCDEF1`
+  - Advertises the BLE service with UUID: `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`
+  - Exposes a writable characteristic with UUID: `A1B2C3D4-E5F6-7890-ABCD-EF1234567891`
   - Handles the `ENABLE_HOTSPOT` command to toggle hotspot
 
 ## Installation
@@ -62,8 +62,8 @@ To use this Mac app, you need a companion Android app that runs a BLE GATT serve
 
 ```kotlin
 // BLE Service UUIDs
-const val HOTSPOT_SERVICE_UUID = "12345678-1234-5678-1234-56789ABCDEF0"
-const val HOTSPOT_CHARACTERISTIC_UUID = "12345678-1234-5678-1234-56789ABCDEF1"
+const val HOTSPOT_SERVICE_UUID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
+const val HOTSPOT_CHARACTERISTIC_UUID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567891"
 
 // In your GattServerCallback
 override fun onCharacteristicWriteRequest(

@@ -36,11 +36,17 @@ class BLEManager: NSObject, ObservableObject {
     private var connectedPeripheral: CBPeripheral?
     private var hotspotCharacteristic: CBCharacteristic?
     
+    // MARK: - Configuration Constants
+    
+    /// Timeout duration for BLE scanning in seconds
+    static let scanTimeoutSeconds: TimeInterval = 30
+    
     // MARK: - BLE Service and Characteristic UUIDs
     // These UUIDs should match the Android BLE server implementation
-    // Default UUIDs - can be customized for specific Android app implementation
-    static let hotspotServiceUUID = CBUUID(string: "12345678-1234-5678-1234-56789ABCDEF0")
-    static let hotspotCharacteristicUUID = CBUUID(string: "12345678-1234-5678-1234-56789ABCDEF1")
+    // IMPORTANT: Replace these with your own unique UUIDs generated using `uuidgen` command
+    // or an online UUID generator to avoid conflicts with other applications
+    static let hotspotServiceUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
+    static let hotspotCharacteristicUUID = CBUUID(string: "A1B2C3D4-E5F6-7890-ABCD-EF1234567891")
     
     // Command to trigger hotspot
     static let triggerHotspotCommand: Data = "ENABLE_HOTSPOT".data(using: .utf8)!
@@ -65,15 +71,29 @@ class BLEManager: NSObject, ObservableObject {
         connectionStatus = "Scanning..."
         lastStatusMessage = "Looking for devices..."
         
-        // Scan for devices advertising the hotspot service
-        // Also scan for all devices to find potential Android phones
+        // First try scanning for devices advertising the specific hotspot service
+        // This is more efficient but requires the Android app to advertise the service UUID
         centralManager.scanForPeripherals(
-            withServices: nil,
+            withServices: [BLEManager.hotspotServiceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
         
-        // Auto-stop scanning after 30 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+        // After a short delay, also scan for all devices to find Android phones
+        // that might not advertise the specific service UUID
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+            guard let self = self, self.isScanning else { return }
+            
+            // If no devices found with specific service, scan all devices
+            if self.discoveredDevices.isEmpty {
+                self.centralManager.scanForPeripherals(
+                    withServices: nil,
+                    options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+                )
+            }
+        }
+        
+        // Auto-stop scanning after timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + BLEManager.scanTimeoutSeconds) { [weak self] in
             if self?.isScanning == true {
                 self?.stopScanning()
                 self?.lastStatusMessage = "Scan completed"
