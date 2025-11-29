@@ -35,6 +35,8 @@ class BLEManager: NSObject, ObservableObject {
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
     private var hotspotCharacteristic: CBCharacteristic?
+    private var lastCommandTime: Date?
+    private let minimumCommandInterval: TimeInterval = 0.5 // 500ms between commands
     
     // MARK: - Configuration Constants
     
@@ -126,17 +128,49 @@ class BLEManager: NSObject, ObservableObject {
     /// Send command to enable or disable hotspot on the connected Android device
     /// - Parameter enable: true to enable hotspot, false to disable
     func triggerHotspot(enable: Bool) {
+        print("🔵 triggerHotspot called - enable: \(enable)")
+        print("🔵 isSendingCommand: \(isSendingCommand)")
+        print("🔵 isConnected: \(isConnected)")
+        print("🔵 Peripheral state: \(connectedPeripheral?.state.rawValue ?? -1)")
+        print("🔵 Characteristic: \(hotspotCharacteristic != nil)")
+        
+        // Check if enough time has passed since last command
+        if let lastTime = lastCommandTime,
+           Date().timeIntervalSince(lastTime) < minimumCommandInterval {
+            lastStatusMessage = "Please wait before sending another command"
+            return
+        }
+        
+        // Validate connection
         guard let peripheral = connectedPeripheral,
-              let characteristic = hotspotCharacteristic else {
+              let characteristic = hotspotCharacteristic,
+              peripheral.state == .connected else {
             lastStatusMessage = "Not connected to device"
+            isSendingCommand = false
+            return
+        }
+        
+        // Prevent multiple simultaneous commands
+        guard !isSendingCommand else {
+            lastStatusMessage = "Command already in progress"
             return
         }
         
         isSendingCommand = true
+        lastCommandTime = Date()
         let command = enable ? BLEManager.enableHotspotCommand : BLEManager.disableHotspotCommand
         lastStatusMessage = enable ? "Enabling hotspot..." : "Disabling hotspot..."
         
         peripheral.writeValue(command, for: characteristic, type: .withResponse)
+        
+        // Safety timeout - reset flag if no response after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+            guard let self = self else { return }
+            if self.isSendingCommand {
+                self.isSendingCommand = false
+                self.lastStatusMessage = "Command timeout - please try again"
+            }
+        }
     }
 }
 
@@ -205,15 +239,20 @@ extension BLEManager: CBCentralManagerDelegate {
     }
     
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        isConnected = false
-        connectionStatus = "Disconnected"
-        connectedPeripheral = nil
-        hotspotCharacteristic = nil
-        
-        if let error = error {
-            lastStatusMessage = "Disconnected: \(error.localizedDescription)"
-        } else {
-            lastStatusMessage = "Disconnected from device"
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.isConnected = false
+            self.connectionStatus = "Disconnected"
+            self.connectedPeripheral = nil
+            self.hotspotCharacteristic = nil
+            self.isSendingCommand = false // Reset command flag on disconnect
+            
+            if let error = error {
+                self.lastStatusMessage = "Disconnected: \(error.localizedDescription)"
+            } else {
+                self.lastStatusMessage = "Disconnected from device"
+            }
         }
     }
 }
@@ -258,12 +297,19 @@ extension BLEManager: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
-        isSendingCommand = false
+        print("🟢 didWriteValueFor callback - error: \(error?.localizedDescription ?? "none")")
         
-        if let error = error {
-            lastStatusMessage = "Failed to send command: \(error.localizedDescription)"
-        } else {
-            lastStatusMessage = "Command sent successfully!"
+        // Use main thread for UI updates
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.isSendingCommand = false
+            
+            if let error = error {
+                self.lastStatusMessage = "Failed to send command: \(error.localizedDescription)"
+            } else {
+                self.lastStatusMessage = "Command sent successfully!"
+            }
         }
     }
     
