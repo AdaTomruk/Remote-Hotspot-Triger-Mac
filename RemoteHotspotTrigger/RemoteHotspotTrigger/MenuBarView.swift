@@ -84,20 +84,35 @@ struct MenuBarView: View {
                     .padding(.vertical, 4)
                 }
             } else {
-                // Trigger Hotspot Button
+                // Enable Hotspot Button
                 Button(action: {
-                    bleManager.triggerHotspot()
+                    bleManager.triggerHotspot(enable: true)
                 }) {
                     HStack {
-                        Image(systemName: "antenna.radiowaves.left.and.right")
+                        Image(systemName: "wifi")
                         Text("Enable Hotspot")
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.green)
-                .padding(.horizontal)
                 .disabled(bleManager.isSendingCommand)
+                .padding(.horizontal)
+                
+                // Disable Hotspot Button
+                Button(action: {
+                    bleManager.triggerHotspot(enable: false)
+                }) {
+                    HStack {
+                        Image(systemName: "wifi.slash")
+                        Text("Disable Hotspot")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(.red)
+                .disabled(bleManager.isSendingCommand)
+                .padding(.horizontal)
                 
                 // Disconnect Button
                 Button(action: {

@@ -48,8 +48,9 @@ class BLEManager: NSObject, ObservableObject {
     static let hotspotServiceUUID = CBUUID(string: "C15ABA22-C32C-4A01-A770-80B82782D92F")
     static let hotspotCharacteristicUUID = CBUUID(string: "19A0B431-9E31-41C4-9DB0-D8EA70E81501")
     
-    // Command to trigger hotspot
-    static let triggerHotspotCommand: Data = "ENABLE_HOTSPOT".data(using: .utf8)!
+    // Command bytes matching Android app expectations
+    static let enableHotspotCommand: Data = Data([0x01])
+    static let disableHotspotCommand: Data = Data([0x00])
     
     // MARK: - Initialization
     override init() {
@@ -122,8 +123,9 @@ class BLEManager: NSObject, ObservableObject {
         centralManager.cancelPeripheralConnection(peripheral)
     }
     
-    /// Send command to trigger hotspot on the connected Android device
-    func triggerHotspot() {
+    /// Send command to enable or disable hotspot on the connected Android device
+    /// - Parameter enable: true to enable hotspot, false to disable
+    func triggerHotspot(enable: Bool) {
         guard let peripheral = connectedPeripheral,
               let characteristic = hotspotCharacteristic else {
             lastStatusMessage = "Not connected to device"
@@ -131,13 +133,10 @@ class BLEManager: NSObject, ObservableObject {
         }
         
         isSendingCommand = true
-        lastStatusMessage = "Sending hotspot command..."
+        let command = enable ? BLEManager.enableHotspotCommand : BLEManager.disableHotspotCommand
+        lastStatusMessage = enable ? "Enabling hotspot..." : "Disabling hotspot..."
         
-        peripheral.writeValue(
-            BLEManager.triggerHotspotCommand,
-            for: characteristic,
-            type: .withResponse
-        )
+        peripheral.writeValue(command, for: characteristic, type: .withResponse)
     }
 }
 
@@ -264,7 +263,7 @@ extension BLEManager: CBPeripheralDelegate {
         if let error = error {
             lastStatusMessage = "Failed to send command: \(error.localizedDescription)"
         } else {
-            lastStatusMessage = "Hotspot command sent successfully!"
+            lastStatusMessage = "Command sent successfully!"
         }
     }
     
