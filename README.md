@@ -7,7 +7,7 @@ A SwiftUI menu bar application for macOS that triggers a Bluetooth Low Energy (B
 - **Menu Bar App**: Lives in your Mac's menu bar for quick access
 - **BLE Communication**: Uses Bluetooth Low Energy for power-efficient communication
 - **Device Discovery**: Automatically scans and lists available BLE devices
-- **Simple Interface**: One-click hotspot activation
+- **Simple Interface**: One-click hotspot enable/disable
 
 ## Requirements
 
@@ -19,9 +19,9 @@ A SwiftUI menu bar application for macOS that triggers a Bluetooth Low Energy (B
 ### Android
 - Android phone with BLE GATT server capability
 - Companion Android app that:
-  - Advertises the BLE service with UUID: `A1B2C3D4-E5F6-7890-ABCD-EF1234567890`
-  - Exposes a writable characteristic with UUID: `A1B2C3D4-E5F6-7890-ABCD-EF1234567891`
-  - Handles the `ENABLE_HOTSPOT` command to toggle hotspot
+  - Advertises the BLE service with UUID: `C15ABA22-C32C-4A01-A770-80B82782D92F`
+  - Exposes a writable characteristic with UUID: `19A0B431-9E31-41C4-9DB0-D8EA70E81501`
+  - Handles byte commands: `0x01` to enable hotspot, `0x00` to disable hotspot
 
 ## Installation
 
@@ -44,26 +44,30 @@ A SwiftUI menu bar application for macOS that triggers a Bluetooth Low Energy (B
 2. Click the icon to open the menu
 3. Click "Scan for Device" to discover your Android phone
 4. Select your Android device from the list to connect
-5. Once connected, click "Enable Hotspot" to trigger the hotspot on your Android phone
+5. Once connected, click "Enable Hotspot" to turn on the hotspot or "Disable Hotspot" to turn it off
 
 ## Android Companion App
 
 To use this Mac app, you need a companion Android app that runs a BLE GATT server. The Android app should:
 
-1. **Advertise a BLE Service** with the UUID: `12345678-1234-5678-1234-56789ABCDEF0`
+1. **Advertise a BLE Service** with the UUID: `C15ABA22-C32C-4A01-A770-80B82782D92F`
 
-2. **Expose a Characteristic** with the UUID: `12345678-1234-5678-1234-56789ABCDEF1`
+2. **Expose a Characteristic** with the UUID: `19A0B431-9E31-41C4-9DB0-D8EA70E81501`
    - Properties: Write
    - Permissions: Write
 
-3. **Handle the Command**: When receiving `ENABLE_HOTSPOT` (UTF-8 string), toggle the device's hotspot
+3. **Handle the Commands**: When receiving byte `0x01`, enable the hotspot. When receiving byte `0x00`, disable the hotspot.
 
 ### Sample Android Implementation
 
 ```kotlin
 // BLE Service UUIDs
-const val HOTSPOT_SERVICE_UUID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"
-const val HOTSPOT_CHARACTERISTIC_UUID = "A1B2C3D4-E5F6-7890-ABCD-EF1234567891"
+const val HOTSPOT_SERVICE_UUID = "C15ABA22-C32C-4A01-A770-80B82782D92F"
+const val HOTSPOT_CHARACTERISTIC_UUID = "19A0B431-9E31-41C4-9DB0-D8EA70E81501"
+
+// Command bytes
+const val COMMAND_ENABLE_HOTSPOT: Byte = 0x01
+const val COMMAND_DISABLE_HOTSPOT: Byte = 0x00
 
 // In your GattServerCallback
 override fun onCharacteristicWriteRequest(
@@ -76,10 +80,11 @@ override fun onCharacteristicWriteRequest(
     value: ByteArray
 ) {
     if (characteristic.uuid == UUID.fromString(HOTSPOT_CHARACTERISTIC_UUID)) {
-        val command = String(value, Charsets.UTF_8)
-        if (command == "ENABLE_HOTSPOT") {
-            // Toggle hotspot using appropriate Android API
-            toggleHotspot()
+        if (value.isNotEmpty()) {
+            when (value[0]) {
+                COMMAND_ENABLE_HOTSPOT -> enableHotspot()
+                COMMAND_DISABLE_HOTSPOT -> disableHotspot()
+            }
         }
         if (responseNeeded) {
             gattServer.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
@@ -101,10 +106,15 @@ static let hotspotCharacteristicUUID = CBUUID(string: "YOUR-CHARACTERISTIC-UUID-
 
 ### Changing the Command
 
-To change the command sent to the Android device, modify:
+The command bytes sent to the Android device are:
+- `0x01` (1) to enable hotspot
+- `0x00` (0) to disable hotspot
+
+To change these values, modify in `BLEManager.swift`:
 
 ```swift
-static let triggerHotspotCommand: Data = "YOUR_COMMAND".data(using: .utf8)!
+static let enableHotspotCommand: Data = Data([0x01])
+static let disableHotspotCommand: Data = Data([0x00])
 ```
 
 ## Permissions
