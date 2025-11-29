@@ -209,13 +209,14 @@ class BLEManager: NSObject, ObservableObject {
                 if let error = error {
                     let nsError = error as NSError
                     
-                    // Handle specific error cases
-                    switch nsError.code {
-                    case 7: // Already associated
+                    // Handle specific error cases using NEHotspotConfigurationError codes
+                    if nsError.domain == NEHotspotConfigurationErrorDomain,
+                       let hotspotError = NEHotspotConfigurationError(rawValue: nsError.code),
+                       hotspotError == .alreadyAssociated {
                         self.wifiJoinStatus = "Already connected to \(ssid)"
                         self.lastStatusMessage = "Already connected to WiFi network"
                         print("🟢 Already connected to WiFi")
-                    default:
+                    } else {
                         self.wifiJoinStatus = "Failed to join \(ssid)"
                         self.lastStatusMessage = "Failed to join WiFi: \(error.localizedDescription)"
                         print("🔴 WiFi join error: \(error.localizedDescription)")
