@@ -12,6 +12,7 @@
 import Foundation
 import CoreBluetooth
 import Combine
+import NetworkExtension
 
 /// Represents a discovered BLE device
 struct DiscoveredDevice: Identifiable {
@@ -19,6 +20,12 @@ struct DiscoveredDevice: Identifiable {
     let peripheral: CBPeripheral
     let name: String
     let rssi: Int
+}
+
+/// Represents WiFi hotspot credentials received from Android device
+struct HotspotCredentials: Codable {
+    let ssid: String
+    let password: String
 }
 
 /// BLE Manager handles all Bluetooth Low Energy communication
@@ -30,6 +37,9 @@ class BLEManager: NSObject, ObservableObject {
     @Published var discoveredDevices: [DiscoveredDevice] = []
     @Published var lastStatusMessage: String?
     @Published var isSendingCommand = false
+    @Published var receivedCredentials: HotspotCredentials?
+    @Published var isJoiningWiFi = false
+    @Published var wifiJoinStatus: String?
     
     // MARK: - Private Properties
     private var centralManager: CBCentralManager!
@@ -175,6 +185,54 @@ class BLEManager: NSObject, ObservableObject {
             }
         }
     }
+    
+    /// Attempts to join the WiFi network with the provided credentials
+    /// - Parameters:
+    ///   - ssid: The WiFi network name
+    ///   - password: The WiFi network password
+    private func joinWiFiNetwork(ssid: String, password: String) {
+        print("🟢 Attempting to join WiFi: \(ssid)")
+        
+        isJoiningWiFi = true
+        wifiJoinStatus = "Joining \(ssid)..."
+        lastStatusMessage = "Connecting to WiFi network..."
+        
+        let config = NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
+        config.joinOnce = false // Remember the network for future use
+        
+        NEHotspotConfigurationManager.shared.apply(config) { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                
+                self.isJoiningWiFi = false
+                
+                if let error = error {
+                    let nsError = error as NSError
+                    
+                    // Handle specific error cases using NEHotspotConfigurationError codes
+                    if nsError.domain == NEHotspotConfigurationErrorDomain,
+                       let hotspotError = NEHotspotConfigurationError(rawValue: nsError.code),
+                       hotspotError == .alreadyAssociated {
+                        self.wifiJoinStatus = "Already connected to \(ssid)"
+                        self.lastStatusMessage = "Already connected to WiFi network"
+                        print("🟢 Already connected to WiFi")
+                    } else {
+                        self.wifiJoinStatus = "Failed to join \(ssid)"
+                        self.lastStatusMessage = "Failed to join WiFi: \(error.localizedDescription)"
+                        print("🔴 WiFi join error: \(error.localizedDescription)")
+                    }
+                } else {
+                    self.wifiJoinStatus = "Connected to \(ssid)"
+                    self.lastStatusMessage = "Successfully connected to \(ssid)!"
+                    print("🟢 Successfully joined WiFi: \(ssid)")
+                    
+                    // Optionally disconnect BLE after successfully joining WiFi
+                    // Uncomment the next line if you want to auto-disconnect
+                    // self.disconnect()
+                }
+            }
+        }
+    }
 }
 
 // MARK: - CBCentralManagerDelegate
@@ -294,7 +352,12 @@ extension BLEManager: CBPeripheralDelegate {
         for characteristic in characteristics {
             if characteristic.uuid == BLEManager.hotspotCharacteristicUUID {
                 hotspotCharacteristic = characteristic
+                
+                // Enable notifications to receive credentials
+                peripheral.setNotifyValue(true, for: characteristic)
+                
                 lastStatusMessage = "Ready to trigger hotspot"
+                print("🔵 Notifications enabled for characteristic")
             }
         }
     }
@@ -321,12 +384,41 @@ extension BLEManager: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             lastStatusMessage = "Error reading response: \(error.localizedDescription)"
+            print("🔴 Error updating value: \(error.localizedDescription)")
             return
         }
         
-        if let data = characteristic.value,
-           let response = String(data: data, encoding: .utf8) {
-            lastStatusMessage = "Response: \(response)"
+        guard characteristic.uuid == BLEManager.hotspotCharacteristicUUID,
+              let data = characteristic.value else {
+            return
+        }
+        
+        print("🟢 Received notification data: \(data.count) bytes")
+        
+        // Try to decode as JSON credentials
+        do {
+            let credentials = try JSONDecoder().decode(HotspotCredentials.self, from: data)
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                
+                self.receivedCredentials = credentials
+                self.lastStatusMessage = "Received credentials for \(credentials.ssid)"
+                print("🟢 Parsed credentials - SSID: \(credentials.ssid)")
+                
+                // Automatically join the WiFi network
+                self.joinWiFiNetwork(ssid: credentials.ssid, password: credentials.password)
+            }
+        } catch {
+            // If not JSON, try to decode as plain text response
+            if let response = String(data: data, encoding: .utf8) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.lastStatusMessage = "Response: \(response)"
+                    print("🟡 Received text response: \(response)")
+                }
+            } else {
+                print("🔴 Failed to decode notification data: \(error.localizedDescription)")
+            }
         }
     }
 }

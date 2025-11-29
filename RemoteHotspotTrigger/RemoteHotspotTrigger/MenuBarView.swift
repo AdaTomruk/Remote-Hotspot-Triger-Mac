@@ -114,6 +114,47 @@ struct MenuBarView: View {
                 .disabled(bleManager.isSendingCommand)
                 .padding(.horizontal)
                 
+                // WiFi Connection Status
+                if bleManager.isJoiningWiFi {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text("Joining WiFi network...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                }
+
+                // Display received credentials
+                if let credentials = bleManager.receivedCredentials {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("WiFi Network:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        HStack {
+                            Image(systemName: "wifi")
+                                .foregroundColor(.blue)
+                            Text(credentials.ssid)
+                                .font(.body)
+                                .bold()
+                        }
+                        
+                        if let status = bleManager.wifiJoinStatus {
+                            Text(status)
+                                .font(.caption)
+                                .foregroundColor(status.contains("Connected") ? .green : .orange)
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                }
+                
                 // Disconnect Button
                 Button(action: {
                     bleManager.disconnect()

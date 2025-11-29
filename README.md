@@ -121,8 +121,34 @@ static let disableHotspotCommand: Data = Data([0x00])
 
 The app requires the following permissions:
 - **Bluetooth**: To communicate with your Android device via BLE
+- **Hotspot Configuration**: To automatically join WiFi networks
+- **Network Client**: To establish network connections
 
 On first launch, macOS will prompt you to allow Bluetooth access.
+
+## Automatic WiFi Connection
+
+When you click "Enable Hotspot", the app will:
+
+1. **Send BLE Command**: Sends the enable command to your Android device
+2. **Receive Credentials**: Android responds with hotspot SSID and password
+3. **Auto-Join WiFi**: Automatically connects your Mac to the hotspot
+4. **Show Status**: Displays connection status in the menu
+
+### Credential Format
+
+The Android app sends credentials as JSON:
+```json
+{"ssid":"MyHotspot","password":"12345678"}
+```
+
+The Mac app automatically parses this and joins the network.
+
+### Requirements
+
+- macOS 13.0 (Ventura) or later
+- Hotspot Configuration entitlement
+- Network client capability
 
 ## Architecture
 
@@ -146,6 +172,21 @@ On first launch, macOS will prompt you to allow Bluetooth access.
 - Verify the characteristic UUID is correct
 - Ensure the characteristic has write permissions
 - Check Android app logs for incoming connections
+
+### WiFi Connection Issues
+
+**"Failed to join WiFi" error:**
+- Ensure the hotspot is fully started (wait a few seconds)
+- Check that the password is correct
+- Try manually connecting once to trust the network
+
+**"Already connected" message:**
+- Your Mac is already on the hotspot network
+- This is normal and not an error
+
+**WiFi doesn't auto-connect:**
+- Check System Settings → Privacy & Security → Local Network
+- Ensure the app has network permissions
 
 ## License
 
