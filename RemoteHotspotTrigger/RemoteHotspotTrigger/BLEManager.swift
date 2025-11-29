@@ -37,6 +37,7 @@ class BLEManager: NSObject, ObservableObject {
     private var hotspotCharacteristic: CBCharacteristic?
     private var lastCommandTime: Date?
     private let minimumCommandInterval: TimeInterval = 0.5 // 500ms between commands
+    private let commandTimeoutInterval: TimeInterval = 5.0 // 5 seconds timeout for stuck commands
     
     // MARK: - Configuration Constants
     
@@ -128,11 +129,13 @@ class BLEManager: NSObject, ObservableObject {
     /// Send command to enable or disable hotspot on the connected Android device
     /// - Parameter enable: true to enable hotspot, false to disable
     func triggerHotspot(enable: Bool) {
+        #if DEBUG
         print("🔵 triggerHotspot called - enable: \(enable)")
         print("🔵 isSendingCommand: \(isSendingCommand)")
         print("🔵 isConnected: \(isConnected)")
         print("🔵 Peripheral state: \(connectedPeripheral?.state.rawValue ?? -1)")
         print("🔵 Characteristic: \(hotspotCharacteristic != nil)")
+        #endif
         
         // Check if enough time has passed since last command
         if let lastTime = lastCommandTime,
@@ -163,8 +166,8 @@ class BLEManager: NSObject, ObservableObject {
         
         peripheral.writeValue(command, for: characteristic, type: .withResponse)
         
-        // Safety timeout - reset flag if no response after 5 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) { [weak self] in
+        // Safety timeout - reset flag if no response after timeout
+        DispatchQueue.main.asyncAfter(deadline: .now() + commandTimeoutInterval) { [weak self] in
             guard let self = self else { return }
             if self.isSendingCommand {
                 self.isSendingCommand = false
@@ -297,7 +300,9 @@ extension BLEManager: CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        #if DEBUG
         print("🟢 didWriteValueFor callback - error: \(error?.localizedDescription ?? "none")")
+        #endif
         
         // Use main thread for UI updates
         DispatchQueue.main.async { [weak self] in
