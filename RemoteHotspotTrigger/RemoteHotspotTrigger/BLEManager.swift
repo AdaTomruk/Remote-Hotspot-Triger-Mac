@@ -12,7 +12,8 @@
 import Foundation
 import CoreBluetooth
 import Combine
-import NetworkExtension
+import UserNotifications
+import AppKit
 
 /// Represents a discovered BLE device
 struct DiscoveredDevice: Identifiable {
@@ -38,7 +39,6 @@ class BLEManager: NSObject, ObservableObject {
     @Published var lastStatusMessage: String?
     @Published var isSendingCommand = false
     @Published var receivedCredentials: HotspotCredentials?
-    @Published var isJoiningWiFi = false
     @Published var wifiJoinStatus: String?
     
     // MARK: - Private Properties
@@ -69,6 +69,15 @@ class BLEManager: NSObject, ObservableObject {
     override init() {
         super.init()
         centralManager = CBCentralManager(delegate: self, queue: nil)
+        
+        // Request notification permission
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if granted {
+                print("🟢 Notification permission granted")
+            } else if let error = error {
+                print("🔴 Notification permission error: \(error.localizedDescription)")
+            }
+        }
     }
     
     // MARK: - Public Methods
@@ -186,49 +195,44 @@ class BLEManager: NSObject, ObservableObject {
         }
     }
     
-    /// Attempts to join the WiFi network with the provided credentials
+    /// Handles received WiFi credentials - copies password to clipboard and notifies user
     /// - Parameters:
     ///   - ssid: The WiFi network name
     ///   - password: The WiFi network password
-    private func joinWiFiNetwork(ssid: String, password: String) {
-        print("🟢 Attempting to join WiFi: \(ssid)")
+    private func handleReceivedCredentials(ssid: String, password: String) {
+        print("🟢 Received credentials - SSID: \(ssid)")
         
-        isJoiningWiFi = true
-        wifiJoinStatus = "Joining \(ssid)..."
-        lastStatusMessage = "Connecting to WiFi network..."
-        
-        let config = NEHotspotConfiguration(ssid: ssid, passphrase: password, isWEP: false)
-        config.joinOnce = false // Remember the network for future use
-        
-        NEHotspotConfigurationManager.shared.apply(config) { [weak self] error in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                
-                self.isJoiningWiFi = false
-                
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // Copy password to clipboard
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(password, forType: .string)
+            print("🟢 Password copied to clipboard")
+            
+            // Update published properties
+            self.receivedCredentials = HotspotCredentials(ssid: ssid, password: password)
+            self.wifiJoinStatus = "Password copied! Click WiFi menu to connect"
+            self.lastStatusMessage = "Ready to join '\(ssid)' - password in clipboard"
+            
+            // Show system notification
+            let notification = UNMutableNotificationContent()
+            notification.title = "🔥 Hotspot Ready: \(ssid)"
+            notification.body = "Password copied to clipboard!\n\nClick WiFi menu bar icon (⌘ + click status bar) and select '\(ssid)' to connect."
+            notification.sound = .default
+            
+            let request = UNNotificationRequest(
+                identifier: UUID().uuidString,
+                content: notification,
+                trigger: nil
+            )
+            
+            UNUserNotificationCenter.current().add(request) { error in
                 if let error = error {
-                    let nsError = error as NSError
-                    
-                    // Handle specific error cases using NEHotspotConfigurationError codes
-                    if nsError.domain == NEHotspotConfigurationErrorDomain,
-                       let hotspotError = NEHotspotConfigurationError(rawValue: nsError.code),
-                       hotspotError == .alreadyAssociated {
-                        self.wifiJoinStatus = "Already connected to \(ssid)"
-                        self.lastStatusMessage = "Already connected to WiFi network"
-                        print("🟢 Already connected to WiFi")
-                    } else {
-                        self.wifiJoinStatus = "Failed to join \(ssid)"
-                        self.lastStatusMessage = "Failed to join WiFi: \(error.localizedDescription)"
-                        print("🔴 WiFi join error: \(error.localizedDescription)")
-                    }
+                    print("🔴 Notification error: \(error.localizedDescription)")
                 } else {
-                    self.wifiJoinStatus = "Connected to \(ssid)"
-                    self.lastStatusMessage = "Successfully connected to \(ssid)!"
-                    print("🟢 Successfully joined WiFi: \(ssid)")
-                    
-                    // Optionally disconnect BLE after successfully joining WiFi
-                    // Uncomment the next line if you want to auto-disconnect
-                    // self.disconnect()
+                    print("🟢 Notification sent successfully")
                 }
             }
         }
@@ -398,17 +402,11 @@ extension BLEManager: CBPeripheralDelegate {
         // Try to decode as JSON credentials
         do {
             let credentials = try JSONDecoder().decode(HotspotCredentials.self, from: data)
+            print("🟢 Parsed credentials - SSID: \(credentials.ssid)")
             
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                
-                self.receivedCredentials = credentials
-                self.lastStatusMessage = "Received credentials for \(credentials.ssid)"
-                print("🟢 Parsed credentials - SSID: \(credentials.ssid)")
-                
-                // Automatically join the WiFi network
-                self.joinWiFiNetwork(ssid: credentials.ssid, password: credentials.password)
-            }
+            // Handle the credentials (copy to clipboard and notify)
+            handleReceivedCredentials(ssid: credentials.ssid, password: credentials.password)
+            
         } catch {
             // If not JSON, try to decode as plain text response
             if let response = String(data: data, encoding: .utf8) {
