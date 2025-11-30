@@ -121,19 +121,35 @@ static let disableHotspotCommand: Data = Data([0x00])
 
 The app requires the following permissions:
 - **Bluetooth**: To communicate with your Android device via BLE
-- **Hotspot Configuration**: To automatically join WiFi networks
-- **Network Client**: To establish network connections
 
-On first launch, macOS will prompt you to allow Bluetooth access.
+On first launch, macOS will prompt you to allow Bluetooth access and notifications.
 
-## Automatic WiFi Connection
+## WiFi Credential Sharing
 
 When you click "Enable Hotspot", the app will:
 
 1. **Send BLE Command**: Sends the enable command to your Android device
 2. **Receive Credentials**: Android responds with hotspot SSID and password
-3. **Auto-Join WiFi**: Automatically connects your Mac to the hotspot
-4. **Show Status**: Displays connection status in the menu
+3. **Copy to Clipboard**: Password is automatically copied to your clipboard
+4. **Show Notification**: System notification with instructions
+5. **Manual Connection**: Click WiFi menu bar icon and select the network (password auto-pastes)
+
+### How to Connect
+
+1. Click "Enable Hotspot" in the app
+2. Wait for notification: "🔥 Hotspot Ready: [Network Name]"
+3. Click the WiFi icon in your Mac's menu bar (or press ⌘ + click status bar)
+4. Select your hotspot network from the list
+5. The password is already in your clipboard - paste it (⌘ + V)
+6. Click "Join"
+
+### Why Not Automatic?
+
+macOS does not provide an API for apps to programmatically join WiFi networks for security reasons. This clipboard method is the most user-friendly alternative:
+- ✅ Works on all macOS versions
+- ✅ No special permissions needed
+- ✅ Secure (password stays in your clipboard briefly)
+- ✅ One-click + paste = connected!
 
 ### Credential Format
 
@@ -142,13 +158,7 @@ The Android app sends credentials as JSON:
 {"ssid":"MyHotspot","password":"12345678"}
 ```
 
-The Mac app automatically parses this and joins the network.
-
-### Requirements
-
-- macOS 13.0 (Ventura) or later
-- Hotspot Configuration entitlement
-- Network client capability
+The Mac app parses this, copies the password, and shows you the network name.
 
 ## Architecture
 
@@ -173,20 +183,17 @@ The Mac app automatically parses this and joins the network.
 - Ensure the characteristic has write permissions
 - Check Android app logs for incoming connections
 
-### WiFi Connection Issues
+### Clipboard Issues
 
-**"Failed to join WiFi" error:**
-- Ensure the hotspot is fully started (wait a few seconds)
-- Check that the password is correct
-- Try manually connecting once to trust the network
+**Password not copying:**
+- Check System Settings → Privacy & Security → Clipboard
+- Ensure the app has accessibility permissions if needed
+- Try restarting the app
 
-**"Already connected" message:**
-- Your Mac is already on the hotspot network
-- This is normal and not an error
-
-**WiFi doesn't auto-connect:**
-- Check System Settings → Privacy & Security → Local Network
-- Ensure the app has network permissions
+**Notification not appearing:**
+- Check System Settings → Notifications → Remote Hotspot Trigger
+- Ensure notifications are enabled for the app
+- Check notification settings (alerts, sounds)
 
 ## License
 
